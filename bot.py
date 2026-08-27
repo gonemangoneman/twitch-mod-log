@@ -250,7 +250,7 @@ async def send_discord_image(
         try:
             async with session.post(
                 DISCORD_WEBHOOK_PLAIN_URL,
-                json={"content": content},
+                json={"content": content, "allowed_mentions": {"parse": []}},
             ) as resp:
                 if resp.status not in (200, 204):
                     body = await resp.text()
@@ -296,6 +296,21 @@ def handle_privmsg(line: str) -> None:
         user_colors[username] = hex_to_int(color)
     message_buffer[username].append(m.group(3))
 
+def get_irc_command(line: str) -> str | None:
+    parts = line.split(" ")
+
+    #Tagged IRC message:
+    #@tags :prefix COMMAND
+    if line.startswith("@"):
+        return parts[2] if len(parts) > 2 else None
+
+    #Untagged IRC message:
+    #:prefix COMMAND ...
+    if line.startswith(":"):
+        return parts[1] if len(parts) > 1 else None
+
+    #PING, etc.
+    return parts[0] if parts else None
 
 async def connect(session: aiohttp.ClientSession, fonts) -> None:
     reader, writer = await asyncio.open_connection(TWITCH_HOST, TWITCH_PORT)
@@ -310,31 +325,44 @@ async def connect(session: aiohttp.ClientSession, fonts) -> None:
     await writer.drain()
 
     try:
-        async for raw in reader:
-            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
-            if line.startswith("PING"):
-                writer.write(b"PONG :tmi.twitch.tv\r\n")
-                await writer.drain()
-                continue
-            if "Login authentication failed" in line:
-                log.error("Authentication failed — check TWITCH_USERNAME and TWITCH_TOKEN")
-                return
+    async for raw in reader:
+        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
 
-            result = None
-            if "CLEARCHAT" in line:
-                result = handle_clearchat(line, fonts)
-            elif "CLEARMSG" in line:
-                result = handle_clearmsg(line, fonts)
-            elif "PRIVMSG" in line:
-                handle_privmsg(line)
+        command = get_irc_command(line)
 
-            if result:
-                username, image, label, deleted_text = result
-                log.info("Sending mod action image for %s", username)
-                await send_discord_image(session, image, username, label, deleted_text=deleted_text)
-    finally:
-        writer.close()
-        await writer.wait_closed()
+        if command == "PING":
+            writer.write(b"PONG :tmi.twitch.tv\r\n")
+            await writer.drain()
+            continue
+
+        if command == "NOTICE" and "Login authentication failed" in line:
+            log.error("Authentication failed — check TWITCH_USERNAME and TWITCH_TOKEN")
+            return
+
+        result = None
+
+        if command == "CLEARCHAT":
+            result = handle_clearchat(line, fonts)
+
+        elif command == "CLEARMSG":
+            result = handle_clearmsg(line, fonts)
+
+        elif command == "PRIVMSG":
+            handle_privmsg(line)
+
+        if result:
+            username, image, label, deleted_text = result
+            log.info("Sending mod action image for %s", username)
+            await send_discord_image(
+                session,
+                image,
+                username,
+                label,
+                deleted_text=deleted_text,
+            )
+finally:
+    writer.close()
+    await writer.wait_closed()
 
 
 async def main() -> None:

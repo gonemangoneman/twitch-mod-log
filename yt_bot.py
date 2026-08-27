@@ -230,7 +230,7 @@ async def send_discord_image(
         try:
             async with session.post(
                 DISCORD_WEBHOOK_PLAIN_URL,
-                json={"content": content},
+                json={"content": content, "allowed_mentions": {"parse": []}},
             ) as resp:
                 if resp.status not in (200, 204):
                     body = await resp.text()
