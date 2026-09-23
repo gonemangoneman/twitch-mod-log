@@ -3,12 +3,22 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    pull_policy: build
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
+      - path: stack.env
+        required: false
 
   yt-mod-log:
     build:
       context: .
       dockerfile: Dockerfile.yt
+    pull_policy: build
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
+      - path: stack.env
+        required: false
