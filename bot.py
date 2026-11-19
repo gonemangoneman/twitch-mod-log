@@ -325,44 +325,44 @@ async def connect(session: aiohttp.ClientSession, fonts) -> None:
     await writer.drain()
 
     try:
-    async for raw in reader:
-        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+        async for raw in reader:
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
 
-        command = get_irc_command(line)
+            command = get_irc_command(line)
 
-        if command == "PING":
-            writer.write(b"PONG :tmi.twitch.tv\r\n")
-            await writer.drain()
-            continue
+            if command == "PING":
+                writer.write(b"PONG :tmi.twitch.tv\r\n")
+                await writer.drain()
+                continue
 
-        if command == "NOTICE" and "Login authentication failed" in line:
-            log.error("Authentication failed — check TWITCH_USERNAME and TWITCH_TOKEN")
-            return
+            if command == "NOTICE" and "Login authentication failed" in line:
+                log.error("Authentication failed — check TWITCH_USERNAME and TWITCH_TOKEN")
+                return
 
-        result = None
+            result = None
 
-        if command == "CLEARCHAT":
-            result = handle_clearchat(line, fonts)
+            if command == "CLEARCHAT":
+                result = handle_clearchat(line, fonts)
 
-        elif command == "CLEARMSG":
-            result = handle_clearmsg(line, fonts)
+            elif command == "CLEARMSG":
+                result = handle_clearmsg(line, fonts)
 
-        elif command == "PRIVMSG":
-            handle_privmsg(line)
+            elif command == "PRIVMSG":
+                handle_privmsg(line)
 
-        if result:
-            username, image, label, deleted_text = result
-            log.info("Sending mod action image for %s", username)
-            await send_discord_image(
-                session,
-                image,
-                username,
-                label,
-                deleted_text=deleted_text,
-            )
-finally:
-    writer.close()
-    await writer.wait_closed()
+            if result:
+                username, image, label, deleted_text = result
+                log.info("Sending mod action image for %s", username)
+                await send_discord_image(
+                    session,
+                    image,
+                    username,
+                    label,
+                    deleted_text=deleted_text,
+                )
+    finally:
+        writer.close()
+        await writer.wait_closed()
 
 
 async def main() -> None:
